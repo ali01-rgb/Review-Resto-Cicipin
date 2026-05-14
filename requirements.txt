@@ -4,9 +4,6 @@ python-dotenv==1.2.1
 Pillow==10.2.0
 Werkzeug==3.1.6
 dnspython==2.8.0
-cloudinary==1.40.0
-<<<<<<< HEAD
-=======
+cloudinary==1.4.0
 timezonefinder==6.2.0
->>>>>>> d5d77e9108c218c801a8f456b09b79260e1f73a6
 pytz==2024.1
