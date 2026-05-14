@@ -208,6 +208,63 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
+# --- FUNGSI BARU: Logika Kota Pintar yang Jauh Lebih Ketat ---
+def extract_real_city(address):
+    if not address:
+        return None
+        
+    address = address.strip()
+
+    # 1. Deteksi Keyword Pasti (Kota, Kab, Kabupaten, City)
+    match = re.search(r'(?i)\b(?:kota|kabupaten|kab\.?)\s+([a-zA-Z\s]+)', address)
+    if match:
+        result = match.group(1).strip()
+        # Ambil sebelum koma jika ada (contoh: "Kota Semarang, Jawa Tengah")
+        return result.split(',')[0].strip().title()
+        
+    match_en = re.search(r'(?i)\b([a-zA-Z\s]+)\s+city\b', address)
+    if match_en:
+        return match_en.group(1).strip().title()
+
+    # 2. Logika Tanpa Keyword (Pecah berdasarkan koma)
+    parts = [p.strip() for p in address.split(',')]
+    
+    # Bersihkan dari kode pos (hanya angka) atau bagian kosong
+    parts = [p for p in parts if p and not re.fullmatch(r'\d+', p)]
+    
+    if not parts:
+        return None
+        
+    # Daftar Hitam Provinsi (biar nggak keitung sebagai kota)
+    provinces = [
+        'indonesia', 'jawa tengah', 'jateng', 'jawa timur', 'jatim', 'jawa barat', 'jabar', 
+        'dki jakarta', 'banten', 'diy', 'daerah istimewa yogyakarta', 'yogyakarta', 'bali', 
+        'sumatera utara', 'sumatera barat', 'sumatera selatan', 'lampung', 
+        'riau', 'jambi', 'bengkulu', 'kalimantan barat', 'kalimantan timur', 
+        'kalimantan selatan', 'kalimantan tengah', 'sulawesi selatan', 
+        'sulawesi utara', 'sulawesi tengah', 'sulawesi tenggara', 'papua', 
+        'papua barat', 'maluku', 'ntb', 'ntt', 'central java', 'west java', 'east java'
+    ]
+                 
+    # Kalau bagian paling belakang di alamat itu masuk blacklist, buang!
+    while parts and parts[-1].lower() in provinces:
+        parts.pop()
+
+    # Sekarang bagian paling ujung pasti nama Kota/Kabupaten
+    if parts:
+        city_candidate = parts[-1]
+        
+        # Cegah kecolongan: Kalau ternyata cuma nulis "Kecamatan", mundur 1 langkah
+        if re.search(r'(?i)\b(?:kecamatan|kec\.?)\b', city_candidate):
+            if len(parts) > 1:
+                return parts[-2].title()
+            return None 
+            
+        return city_candidate.title()
+        
+    return None
+# ---------------------------------------
+
 def search_restaurants(search_term=None, min_rating=None, max_price=None, sort_by=None, user_lat=None, user_lon=None):
 
     if db is None:
@@ -297,25 +354,33 @@ def index():
             ]))
             total_reviews = reviews_agg[0]["total"] if reviews_agg else 0
 
-            # 3. Hitung Kota Unik (Logika Pintar: Gabung Kota, Kab, City)
-            all_restaurants = db.restaurants.find({}, {"address": 1})
+            # 3. Hitung Kota Unik & Investigasi Alamat
+            all_restaurants = db.restaurants.find({}, {"address": 1, "name": 1})
             city_set = set()
             
+            print("\n" + "="*50)
+            print("🕵️ INVESTIGASI DETEKSI KOTA RESTORAN")
+            print("="*50)
+            
             for res in all_restaurants:
-                address = res.get("address", "")
-                if address:
-                    # Cari nama kota/kabupaten menggunakan Regex
-                    match = re.search(r'(?i)\b(?:kota|kabupaten|kab\.?)\s+([a-z\s]+)|([a-z\s]+)\s+city', address)
-                    if match:
-                        raw_city = match.group(1) or match.group(2)
-                        city_set.add(raw_city.strip().lower())
-                    else:
-                        # Fallback: Ambil kata terakhir/sebelum koma terakhir
-                        parts = address.split(',')
-                        if parts:
-                            city_set.add(parts[-1].strip().lower())
+                raw_address = res.get("address", "")
+                nama_resto = res.get("name", "Tanpa Nama")
+                
+                city = extract_real_city(raw_address)
+                
+                print(f"Resto : {nama_resto}")
+                print(f"Alamat: {raw_address}")
+                print(f"-> Dideteksi: {city}\n")
+                
+                if city:
+                    city_set.add(city.lower())
             
             city_count = len(city_set)
+            
+            print("-" * 50)
+            print(f"Total Kota Unik Akhir: {city_count}")
+            print(f"Daftar Kota: {city_set}")
+            print("="*50 + "\n")
 
         except Exception as exc:
             app.logger.warning("Failed to compute dashboard stats: %s", exc)
