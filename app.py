@@ -14,6 +14,8 @@ from PIL import Image
 from datetime import datetime, time
 import math
 import re
+from timezonefinder import TimezoneFinder
+import pytz
 
 cloudinary.config(
     cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
@@ -27,10 +29,6 @@ app = Flask(__name__, static_folder="static", static_url_path="/static")
 UPLOAD_FOLDER = "/tmp"
 
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-cicipin-2024')
-
-
-
-
 
 def process_image(path, size=(600,400)):
     try:
@@ -134,9 +132,6 @@ def register():
 
     return render_template('register.html')
 
-
-
-
 def is_admin():
     return session.get("username") == "admin"
 
@@ -166,48 +161,114 @@ def compute_open_status(restaurant):
         return restaurant
 
     try:
-        # Use regex to find time patterns like 8:00-22:00 or 08:00-22:00, also handle en dash
-        import re
+        latitude = restaurant.get('latitude')
+        longitude = restaurant.get('longitude')
+        
+        timezone_str = "Asia/Jakarta" 
+        
+        if latitude and longitude:
+            try:
+                tf = TimezoneFinder()
+                timezone_str = tf.timezone_at(lat=float(latitude), lng=float(longitude))
+                if not timezone_str:
+                    timezone_str = "Asia/Jakarta"
+            except Exception:
+                timezone_str = "Asia/Jakarta"
+        
+        tz = pytz.timezone(timezone_str)
+        now = datetime.now(tz).time()
+
         match = re.search(r'(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})', opening_hours)
         if not match:
-            print(f"NO MATCH for {opening_hours}")
             restaurant["is_open"] = None
             return restaurant
 
         open_hour, open_min, close_hour, close_min = map(int, match.groups())
 
-        now = datetime.now().time()
-
         open_time = time(open_hour, open_min)
         close_time = time(close_hour, close_min)
 
-        # Handle case ketika close time adalah hari berikutnya (e.g., 17:00-01:00)
         if close_time < open_time:
-            # Restoran buka melampaui tengah malam
             is_open = now >= open_time or now < close_time
         else:
-            # Normal case
             is_open = open_time <= now <= close_time
         
-        print(f"{opening_hours}: open={open_time}, close={close_time}, now={now}, is_open={is_open}")
         restaurant["is_open"] = is_open
 
-    except:
+    except Exception as e:
         restaurant["is_open"] = None
 
     return restaurant
 
-# --- FITUR BARU: FUNGSI MENGHITUNG JARAK ---
 def haversine(lat1, lon1, lat2, lon2):
-    R = 6371.0 # Radius bumi dalam kilometer
+    R = 6371.0 
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
     a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
-# --- REVISI: DITAMBAHKAN PARAMETER FILTER ---
+# --- FUNGSI BARU: Logika Kota Pintar yang Jauh Lebih Ketat ---
+def extract_real_city(address):
+    if not address:
+        return None
+        
+    address = address.strip()
+
+    # 1. Deteksi Keyword Pasti (Kota, Kab, Kabupaten, City)
+    match = re.search(r'(?i)\b(?:kota|kabupaten|kab\.?)\s+([a-zA-Z\s]+)', address)
+    if match:
+        result = match.group(1).strip()
+        # Ambil sebelum koma jika ada (contoh: "Kota Semarang, Jawa Tengah")
+        return result.split(',')[0].strip().title()
+        
+    match_en = re.search(r'(?i)\b([a-zA-Z\s]+)\s+city\b', address)
+    if match_en:
+        return match_en.group(1).strip().title()
+
+    # 2. Logika Tanpa Keyword (Pecah berdasarkan koma)
+    parts = [p.strip() for p in address.split(',')]
+    
+    # Bersihkan dari kode pos (hanya angka) atau bagian kosong
+    parts = [p for p in parts if p and not re.fullmatch(r'\d+', p)]
+    
+    if not parts:
+        return None
+        
+    # Daftar Hitam Provinsi (biar nggak keitung sebagai kota)
+    provinces = [
+        'indonesia', 'jawa tengah', 'jateng', 'jawa timur', 'jatim', 'jawa barat', 'jabar', 
+        'dki jakarta', 'banten', 'diy', 'daerah istimewa yogyakarta', 'yogyakarta', 'bali', 
+        'sumatera utara', 'sumatera barat', 'sumatera selatan', 'lampung', 
+        'riau', 'jambi', 'bengkulu', 'kalimantan barat', 'kalimantan timur', 
+        'kalimantan selatan', 'kalimantan tengah', 'sulawesi selatan', 
+        'sulawesi utara', 'sulawesi tengah', 'sulawesi tenggara', 'papua', 
+        'papua barat', 'maluku', 'ntb', 'ntt', 'central java', 'west java', 'east java'
+    ]
+                 
+    # Kalau bagian paling belakang di alamat itu masuk blacklist, buang!
+    while parts and parts[-1].lower() in provinces:
+        parts.pop()
+
+    # Sekarang bagian paling ujung pasti nama Kota/Kabupaten
+    if parts:
+        city_candidate = parts[-1]
+        
+        # Cegah kecolongan: Kalau ternyata cuma nulis "Kecamatan", mundur 1 langkah
+        if re.search(r'(?i)\b(?:kecamatan|kec\.?)\b', city_candidate):
+            if len(parts) > 1:
+                return parts[-2].title()
+            return None 
+            
+        return city_candidate.title()
+        
+    return None
+# ---------------------------------------
+
 def search_restaurants(search_term=None, min_rating=None, max_price=None, sort_by=None, user_lat=None, user_lon=None):
+
+    if db is None:
+        return []
 
     query = {}
 
@@ -230,10 +291,8 @@ def search_restaurants(search_term=None, min_rating=None, max_price=None, sort_b
         compute_average_rating(restaurant)
         compute_open_status(restaurant)
 
-        # Hitung jumlah review untuk filter Terlaris
         restaurant['review_count'] = len(restaurant.get('reviews', []))
 
-        # Hitung jarak jika koordinat user berhasil diambil dari browser
         if user_lat and user_lon and restaurant.get('latitude') and restaurant.get('longitude'):
             restaurant['distance'] = haversine(float(user_lat), float(user_lon), float(restaurant['latitude']), float(restaurant['longitude']))
             restaurant['distance_str'] = f"{restaurant['distance']:.1f} km"
@@ -247,7 +306,6 @@ def search_restaurants(search_term=None, min_rating=None, max_price=None, sort_b
 
         result.append(restaurant)
 
-    # Logika Pengurutan (Sorting / Filter)
     if sort_by == 'rating':
         result.sort(key=lambda x: x.get('average_rating') or 0, reverse=True)
     elif sort_by == 'terlaris':
@@ -265,11 +323,8 @@ def index():
         return redirect(url_for('login'))
 
     category = request.args.get("category")
-
     min_rating = request.args.get("min_rating")
     max_price = request.args.get("max_price")
-
-    # REVISI: Ambil parameter dari URL untuk Filter
     sort_by = request.args.get("sort_by")
     user_lat = request.args.get("user_lat")
     user_lon = request.args.get("user_lon")
@@ -277,7 +332,6 @@ def index():
     min_rating = float(min_rating) if min_rating else None
     max_price = float(max_price) if max_price else None
 
-    # REVISI: Masukkan parameter sort ke pencarian
     restaurants = search_restaurants(category, min_rating, max_price, sort_by, user_lat, user_lon)
 
     saved_restaurant_ids = []
@@ -290,28 +344,44 @@ def index():
 
     if db is not None:
         try:
+            # 1. Total Restoran
             restaurant_count = db.restaurants.count_documents({})
 
+            # 2. Total Ulasan (Data Asli dari array reviews)
             reviews_agg = list(db.restaurants.aggregate([
                 {"$project": {"count": {"$size": {"$ifNull": ["$reviews", []]}}}},
                 {"$group": {"_id": None, "total": {"$sum": "$count"}}}
             ]))
             total_reviews = reviews_agg[0]["total"] if reviews_agg else 0
 
-            city_agg = list(db.restaurants.aggregate([
-                {"$match": {"address": {"$exists": True, "$ne": ""}}},
-                {"$project": {"address_parts": {"$split": ["$address", ","]}, "address_len": {"$size": {"$split": ["$address", ","]}}}},
-                {"$project": {"city": {
-                    "$cond": [
-                        {"$gte": ["$address_len", 2]},
-                        {"$trim": {"input": {"$arrayElemAt": [{"$split": ["$address", ","]}, -2]}}},
-                        {"$trim": {"input": {"$arrayElemAt": [{"$split": ["$address", ","]}, -1]}}}
-                    ]
-                }}},
-                {"$group": {"_id": "$city"}},
-                {"$count": "city_count"}
-            ]))
-            city_count = city_agg[0]["city_count"] if city_agg else 0
+            # 3. Hitung Kota Unik & Investigasi Alamat
+            all_restaurants = db.restaurants.find({}, {"address": 1, "name": 1})
+            city_set = set()
+            
+            print("\n" + "="*50)
+            print("🕵️ INVESTIGASI DETEKSI KOTA RESTORAN")
+            print("="*50)
+            
+            for res in all_restaurants:
+                raw_address = res.get("address", "")
+                nama_resto = res.get("name", "Tanpa Nama")
+                
+                city = extract_real_city(raw_address)
+                
+                print(f"Resto : {nama_resto}")
+                print(f"Alamat: {raw_address}")
+                print(f"-> Dideteksi: {city}\n")
+                
+                if city:
+                    city_set.add(city.lower())
+            
+            city_count = len(city_set)
+            
+            print("-" * 50)
+            print(f"Total Kota Unik Akhir: {city_count}")
+            print(f"Daftar Kota: {city_set}")
+            print("="*50 + "\n")
+
         except Exception as exc:
             app.logger.warning("Failed to compute dashboard stats: %s", exc)
 
@@ -319,8 +389,12 @@ def index():
     if "user_id" in session:
         is_authenticated = True
         username = session.get("username")
-        user_wishlist = list(db.wishlists.find({"user_id": session["user_id"]}))
-        saved_restaurant_ids = [str(w["restaurant_id"]) for w in user_wishlist]
+        if db is not None:
+            try:
+                user_wishlist = list(db.wishlists.find({"user_id": session["user_id"]}))
+                saved_restaurant_ids = [str(w["restaurant_id"]) for w in user_wishlist]
+            except Exception as exc:
+                app.logger.warning("Failed to load wishlist: %s", exc)
 
     return render_template(
         'index.html',
@@ -544,7 +618,6 @@ def restaurant_detail(restaurant_id):
             if 1 <= star_value <= 5:
                 rating_counts[star_value] += 1
 
-        # Calculate percentages for rating breakdown
         rating_percentages = {}
         for star in range(1, 6):
             if total_reviews > 0:
@@ -575,8 +648,6 @@ def logout():
 
     return redirect(url_for('login'))
 
-
-# --- FITUR BARU: ROUTE UNTUK MENYIMPAN TO-GO LIST ---
 @app.route('/toggle_wishlist', methods=['POST'])
 def toggle_wishlist():
     if "user_id" not in session:
@@ -596,8 +667,6 @@ def toggle_wishlist():
 
     return {"success": True, "is_saved": is_saved}
 
-
-# --- FITUR BARU: ROUTE UNTUK HALAMAN DAFTAR TO-GO LIST ---
 @app.route('/wishlist')
 def wishlist():
     if "user_id" not in session:
@@ -616,8 +685,5 @@ def wishlist():
 
     return render_template('wishlist.html', restaurants=restaurants, username=session["username"], saved_restaurant_ids=saved_restaurant_ids)
 
-
 if __name__ == '__main__':
     app.run(debug=True)
-
-# Paksa push ulang fitur

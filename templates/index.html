@@ -44,7 +44,7 @@
     <main>
         <section class="hero-section">
             <div class="hero-copy">
-                <span class="hero-top-badge">{{ dashboard_stats.total_reviews }}+ Ulasan Jujur dari Seluruh Indonesia</span>
+                <span class="hero-top-badge">{{ dashboard_stats.total_reviews }} Ulasan Jujur dari Seluruh Indonesia</span>
                 <h1>Temukan & Ulas Kuliner Terbaik</h1>
                 <p>Baca ulasan jujur, beri rating, dan bagikan pengalamanmu makan di restoran favoritmu</p>
 
@@ -189,6 +189,11 @@
             </div>
         </section>
         {% endif %}
+
+        <button class="fab-scroll" title="Scroll">
+            <span class="fab-icon-inner"></span>
+        </button>
+
     </main>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>

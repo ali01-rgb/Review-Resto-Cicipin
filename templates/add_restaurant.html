@@ -83,8 +83,15 @@
 
                 <div class="form-group">
                     <label>Upload Foto Restoran (opsional):</label>
-                    <input type="file" name="image" accept="image/*">
-                    <small>Format yang didukung: JPG, PNG, GIF, WebP, BMP, SVG, dan format gambar lainnya</small>
+                    <div class="drop-zone" id="drop-zone">
+                        <div class="drop-zone-text" id="upload-text">
+                            <span style="font-size: 2.2rem; display: block; margin-bottom: 8px;">📸</span>
+                            Seret & lepas gambar di sini, atau klik untuk memilih file
+                        </div>
+                        <input type="file" name="image" id="image" accept="image/*">
+                        <img id="preview-image" style="display: none;" alt="Preview">
+                    </div>
+                    <small>Format yang didukung: JPG, PNG, GIF, WebP dll.</small>
                 </div>
 
                 <button type="submit" class="btn btn-primary">Tambah Restoran</button>
