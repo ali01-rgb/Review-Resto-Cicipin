@@ -36,7 +36,7 @@
                 {% endif %}
                 {% endwith %}
 
-                <form method="POST" enctype="multipart/form-data">
+                <form method="POST" enctype="multipart/form-data" id="restaurantForm">
                     <div class="form-group">
                         <label>Nama Restoran:</label>
                         <input type="text" name="name" value="{{ restaurant['name'] }}" required>
@@ -85,6 +85,7 @@
                     <div class="form-group">
                         <label>Upload Foto Restoran (opsional):</label>
                         <input type="file" name="image" accept="image/*">
+                        <small>Format yang didukung: JPG, PNG, GIF, WebP, BMP, SVG, dan format gambar lainnya</small>
                     </div>
 
                     <button type="submit" class="btn btn-primary">Simpan Perubahan</button>

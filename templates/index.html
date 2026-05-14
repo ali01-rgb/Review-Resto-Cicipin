@@ -44,7 +44,7 @@
     <main>
         <section class="hero-section">
             <div class="hero-copy">
-                <span class="hero-top-badge">10.000+ Ulasan Jujur dari Seluruh Indonesia</span>
+                <span class="hero-top-badge">{{ dashboard_stats.total_reviews }}+ Ulasan Jujur dari Seluruh Indonesia</span>
                 <h1>Temukan & Ulas Kuliner Terbaik</h1>
                 <p>Baca ulasan jujur, beri rating, dan bagikan pengalamanmu makan di restoran favoritmu</p>
 
@@ -73,8 +73,6 @@
 
         <section class="filter-section">
             <div class="category-pill-grid">
-                <a href="{{ url_for('index', category='semua') }}"
-                    class="category-pill {% if request.args.get('category', '') in ['', 'semua'] %}active{% endif %}">Semua</a>
                 <a href="{{ url_for('index', category='Indonesia') }}"
                     class="category-pill {% if request.args.get('category') == 'Indonesia' %}active{% endif %}">Indonesia</a>
                 <a href="{{ url_for('index', category='Jepang') }}"
