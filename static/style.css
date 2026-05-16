@@ -1669,3 +1669,11 @@ textarea:focus {
 .fab-scroll:hover .fab-icon-inner {
     background-color: var(--primary-dark, #1d4ed8);
 }
+
+/* Efek border pada kategori yang sedang aktif */
+.category-pill.active {
+    border: 2px solid #ff6b6b; /* Ganti warnanya sesuai tema Cicipin kamu */
+    background-color: #fff0f0; 
+    color: #ff6b6b;
+    font-weight: bold;
+}

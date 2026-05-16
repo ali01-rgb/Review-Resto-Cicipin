@@ -51,6 +51,9 @@
                 <form method="GET" class="hero-search-form">
                     <input type="text" name="category" placeholder="Cari restoran, jenis masakan, lokasi..."
                         value="{{ request.args.get('category', '') }}">
+                    {% if request.args.get('sort_by') %}
+                    <input type="hidden" name="sort_by" value="{{ request.args.get('sort_by') }}">
+                    {% endif %}
                     <button type="submit" class="btn btn-primary">Cari</button>
                 </form>
             </div>
@@ -73,20 +76,20 @@
 
         <section class="filter-section">
             <div class="category-pill-grid">
-                <a href="{{ url_for('index', category='Indonesia') }}"
-                    class="category-pill {% if request.args.get('category') == 'Indonesia' %}active{% endif %}">Indonesia</a>
-                <a href="{{ url_for('index', category='Jepang') }}"
-                    class="category-pill {% if request.args.get('category') == 'Jepang' %}active{% endif %}">Jepang</a>
-                <a href="{{ url_for('index', category='Italia') }}"
-                    class="category-pill {% if request.args.get('category') == 'Italia' %}active{% endif %}">Italia</a>
-                <a href="{{ url_for('index', category='Chinese') }}"
-                    class="category-pill {% if request.args.get('category') == 'Chinese' %}active{% endif %}">Chinese</a>
-                <a href="{{ url_for('index', category='Seafood') }}"
-                    class="category-pill {% if request.args.get('category') == 'Seafood' %}active{% endif %}">Seafood</a>
-                <a href="{{ url_for('index', category='Kafe') }}"
-                    class="category-pill {% if request.args.get('category') == 'Kafe' %}active{% endif %}">Kafe</a>
-                <a href="{{ url_for('index', category='Street Food') }}"
-                    class="category-pill {% if request.args.get('category') == 'Street Food' %}active{% endif %}">Street Food</a>
+                <button type="button" onclick="toggleCategory('Indonesia')"
+                    class="category-pill {% if request.args.get('category') == 'Indonesia' %}active{% endif %}">Indonesia</button>
+                <button type="button" onclick="toggleCategory('Jepang')"
+                    class="category-pill {% if request.args.get('category') == 'Jepang' %}active{% endif %}">Jepang</button>
+                <button type="button" onclick="toggleCategory('Italia')"
+                    class="category-pill {% if request.args.get('category') == 'Italia' %}active{% endif %}">Italia</button>
+                <button type="button" onclick="toggleCategory('Chinese')"
+                    class="category-pill {% if request.args.get('category') == 'Chinese' %}active{% endif %}">Chinese</button>
+                <button type="button" onclick="toggleCategory('Seafood')"
+                    class="category-pill {% if request.args.get('category') == 'Seafood' %}active{% endif %}">Seafood</button>
+                <button type="button" onclick="toggleCategory('Kafe')"
+                    class="category-pill {% if request.args.get('category') == 'Kafe' %}active{% endif %}">Kafe</button>
+                <button type="button" onclick="toggleCategory('Street Food')"
+                    class="category-pill {% if request.args.get('category') == 'Street Food' %}active{% endif %}">Street Food</button>
                 {% if is_authenticated %}
                 <a href="{{ url_for('wishlist') }}" class="category-pill">To-Go List</a>
                 {% endif %}
@@ -198,6 +201,24 @@
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
+        // --- LOGIKA BARU: TOGGLE KATEGORI & INTEGRASI FILTER ---
+        function toggleCategory(categoryName) {
+            // Ambil URL saat ini (biar filter 'sort_by' yang lagi aktif nggak ilang)
+            const url = new URL(window.location.href);
+            const currentCategory = url.searchParams.get('category');
+
+            if (currentCategory === categoryName) {
+                // Jika tombol yang ditekan adalah kategori yang sedang aktif -> MATIKAN
+                url.searchParams.delete('category');
+            } else {
+                // Jika tombol yang ditekan adalah kategori baru -> NYALAKAN
+                url.searchParams.set('category', categoryName);
+            }
+
+            // Arahkan web ke URL yang baru
+            window.location.href = url.toString();
+        }
+
         function applySort(sortValue) {
             const url = new URL(window.location.href);
             if (sortValue === 'jarak') {
